@@ -11,6 +11,10 @@ Built for the German public tender portal [service.bund.de](https://www.service.
 >
 > **TenderBot:** Der Auftrag der Stadt Köln umfasst die Scandienstleistungen für die Kommunalwahl 2025, einschließlich der Digitalisierung von Wahlunterlagen, Qualitätskontrolle und fristgerechter Lieferung...
 
+## Demo Screenshots
+
+![Demo 1](docs/screenshots/demo1.jpeg)
+![Demo 2](docs/screenshots/demo2.png)
 
 ## Architecture
 
