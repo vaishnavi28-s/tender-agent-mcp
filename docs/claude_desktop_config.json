@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tenderbot": {
+      "command": "python",
+      "args": ["C:\\path\\to\\tender-assistant-rag\\src\\mcp_server.py"],
+      "env": {
+        "OPENAI_API_KEY": "your-openai-api-key-here"
+      }
+    }
+  }
+}

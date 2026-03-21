@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+tender_vector_db/
+tenders_metadata.json
+tenders_index.json
+*.md
+!README.md
+!docs/*.md
+.DS_Store
+venv/
+.venv/
