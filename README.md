@@ -201,7 +201,7 @@ C:\Users\<YourName>\AppData\Roaming\Claude\claude_desktop_config.json
 
 ## MCP Agent Demo
 
-![TenderBot MCP Agent Demo](docs/screenshots/mcp_demo.gif)
+![TenderBot MCP Agent Demo](docs/screenshots/MCP_Demo.gif)
 ## Demo Screenshots
 
 ![Demo 1](docs/screenshots/demo1.jpeg)
