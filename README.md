@@ -1,8 +1,8 @@
-# TenderBot — RAG-Powered Tender Assistant
+# TenderAgent: RAG-Powered Tender Assistant
 
 An end-to-end AI system that automatically fetches, indexes, and answers questions about public procurement tenders using Retrieval-Augmented Generation (RAG).
 
-Built for the German public tender portal [service.bund.de](https://www.service.bund.de) — queries tenders related to election materials (Wahlunterlagen) and answers user questions in natural language.
+Built for the German public tender portal [service.bund.de](https://www.service.bund.de), queries tenders related to election materials (Wahlunterlagen) and answers user questions in natural language.
 
 
 ## Demo
@@ -140,11 +140,11 @@ python src/pipeline.py
 
 ## Key Features
 
-- **Auto-ingestion** — fetches new tenders every 6 hours from live RSS feed
-- **Smart retrieval** — detects city/title mentions to filter ChromaDB before retrieval
-- **Reranking** — FlashRank reranker improves precision over basic top-k
-- **Source-grounded answers** — GPT-4 answers only from retrieved context, no hallucination
-- **Public data only** — built entirely on publicly available government tenders
+- **Auto-ingestion** - fetches new tenders every 6 hours from live RSS feed
+- **Smart retrieval** - detects city/title mentions to filter ChromaDB before retrieval
+- **Reranking** - FlashRank reranker improves precision over basic top-k
+- **Source-grounded answers** - GPT-4 answers only from retrieved context, no hallucination
+- **Public data only** - built entirely on publicly available government tenders
 
 
 ## Note on Data
@@ -152,7 +152,7 @@ python src/pipeline.py
 This project uses publicly available procurement data from [service.bund.de](https://www.service.bund.de). No proprietary or sensitive data is stored in this repository. Sample tender files in `data/sample_tenders/` are publicly accessible government documents.
 
 
-## MCP Server — Claude Desktop Integration
+## MCP Server: Claude Desktop Integration
 
 TenderBot can also run as an MCP server, letting you query tenders directly from Claude Desktop without opening the Streamlit app.
 
@@ -206,6 +206,6 @@ C:\Users\<YourName>\AppData\Roaming\Claude\claude_desktop_config.json
 
 ![Demo 1](docs/screenshots/demo1.jpeg)
 
-## License
-
-MIT
+## Connect
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://www.linkedin.com/in/vaishnavi-sreekumar-48199a197/)
+[![GitHub](https://img.shields.io/badge/GitHub-Follow-black)](https://github.com/vaishnavi28-s)
