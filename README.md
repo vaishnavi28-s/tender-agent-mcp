@@ -55,7 +55,7 @@ Built for the German public tender portal [service.bund.de](https://www.service.
 │  GPT-4 + LangChain RetrievalQA                         │
 │       │                                                  │
 │       ▼                                                  │
-│  Answer + Sources ──► Streamlit UI                      │
+│  Answer + Sources ──► MCP Server integrated in Claude    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -73,7 +73,12 @@ Built for the German public tender portal [service.bund.de](https://www.service.
 | Frontend | Streamlit |
 | Scheduler | schedule (6-hour intervals) |
 | Data Validation | Pydantic |
-
+| Agent Protocol | MCP (Model Context Protocol) |
+| Rate Limiting | Per-tool rate limiter |
+| Audit Logging | Structured JSON logs with latency |
+| Testing | pytest (20 tests) |
+| Containerization | Docker |
+| CI/CD | GitHub Actions |
 
 ## Project Structure
 
@@ -145,7 +150,13 @@ python src/pipeline.py
 - **Reranking** - FlashRank reranker improves precision over basic top-k
 - **Source-grounded answers** - GPT-4 answers only from retrieved context, no hallucination
 - **Public data only** - built entirely on publicly available government tenders
-
+- **Production MCP server** - 9 tools with input validation, rate limiting, audit logging and async execution
+- **Smart token routing** - classifies queries before LLM call, saves ~40% token costs on list/summary queries
+- **Audit logging** - every tool call logged with timestamp, latency and status
+- **Rate limiting** - per-tool limits prevent abuse (fetch limited to 3/hour)
+- **Health check** - server diagnostics including DB status, uptime and index stats
+- **Dockerized** - runs anywhere with single docker command
+- **CI/CD** - GitHub Actions runs tests on every push
 
 ## Note on Data
 
@@ -166,6 +177,9 @@ TenderBot can also run as an MCP server, letting you query tenders directly from
 | `check_deadlines()` | Get all upcoming deadlines |
 | `fetch_latest_tenders()` | Scrape and index fresh tenders from service.bund.de |
 | `find_matching_tenders(query)` | Find which documents match a query |
+| `summarize_tender(city)` | Generate structured summary of key requirements |
+| `compare_tenders()` | Compare all tenders side by side |
+| `health_check()` | Server status, uptime and diagnostics |
 
 ### Setup on Windows
 
@@ -198,6 +212,23 @@ C:\Users\<YourName>\AppData\Roaming\Claude\claude_desktop_config.json
    - *"What tenders are due this week?"*
    - *"Search tenders for Köln"*
    - *"Fetch the latest tenders from service.bund.de"*
+
+## Production Features
+
+| Feature | Detail |
+|---|---|
+| Smart routing | Detects list/summary/compare queries - skips LLM when not needed |
+| Audit logging | Every tool call logged: tool name, input, latency, status |
+| Rate limiting | search: 10/min, fetch: 3/hour, list: 20/min |
+| Input validation | Pydantic models on all tool inputs |
+| Error handling | Per exception type — no server crashes |
+| Health check | DB status, uptime, index stats, API key verification |
+
+## Run with Docker
+```bash
+docker build -t tenderbot .
+docker run --env-file .env tenderbot
+```
 
 ## MCP Agent Demo
 
