@@ -15,12 +15,12 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from dotenv import load_dotenv
 load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("GROQ_API_KEY")
 
 SEARCH_TERM = "wahlunterlagen"
 BASE_URL = "https://www.service.bund.de/Content/DE/Ausschreibungen/Suche/Formular.html"
@@ -200,6 +200,8 @@ def fetch_and_process():
     clean_all_markdown_files()
 
 def build_vector_store():
+    import chromadb
+
     documents = []
     with open("tenders_index.json", "r", encoding="utf-8") as f:
         index_data = json.load(f)
@@ -214,9 +216,16 @@ def build_vector_store():
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     chunks = splitter.split_documents(documents)
-    embeddings = OpenAIEmbeddings()
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
+    # Clear any existing collection first so rebuilding is idempotent —
+    # without this, every re-run duplicates every chunk already stored.
+    client = chromadb.PersistentClient(path=DB_DIR)
+    existing = [c.name for c in client.list_collections()]
+    if "langchain" in existing:
+        client.delete_collection("langchain")
+
     vectordb = Chroma.from_documents(documents=chunks, embedding=embeddings, persist_directory=DB_DIR)
-    vectordb.persist()
 
 if __name__ == "__main__":
     fetch_and_process()

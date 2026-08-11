@@ -1,21 +1,28 @@
-import os
-import json
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_core.documents import Document
-
-from flashrank import Ranker
-from langchain.retrievers.document_compressors import FlashrankRerank
-from langchain.retrievers import ContextualCompressionRetriever
 from dotenv import load_dotenv
 load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
+
+import os
+import json
+import sys
+from langchain.prompts import PromptTemplate
+from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from flashrank import Ranker, RerankRequest
+from langsmith import traceable
+sys.path.append(os.path.dirname(__file__))
+from router import classify_intent
+from formatting import format_tender_list
+
+
 
 DB_DIR = "tender_vector_db"
-EMBEDDINGS = OpenAIEmbeddings()
-LLM = ChatOpenAI(model="gpt-4", temperature=0)
+INDEX_PATH = os.path.join(os.path.dirname(__file__), "..", "tenders_index.json")
+RELEVANCE_THRESHOLD = 0.3  # tune this empirically, see note below
+
+EMBEDDINGS = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+LLM = ChatGroq(model="openai/gpt-oss-20b", temperature=0, api_key=os.getenv("GROQ_API_KEY"))
+RERANKER = Ranker(model_name="ms-marco-MiniLM-L-12-v2")
 
 prompt = PromptTemplate.from_template("""
 Du bist ein hilfreicher Assistent für öffentliche Ausschreibungen in Deutschland.
@@ -30,47 +37,82 @@ Frage: {question}
 Antwort:
 """)
 
+
 def detect_md_file_by_city_or_title(query: str) -> str | None:
     try:
-        with open("tenders_index.json", "r", encoding="utf-8") as f:
+        with open(INDEX_PATH, "r", encoding="utf-8") as f:
             tenders = json.load(f)
         query = query.lower()
         for tender in tenders:
-            if "city" in tender and tender["city"] and tender["city"].lower() in query:
+            if tender.get("city") and tender["city"].lower() in query:
                 return tender.get("md_file")
         for tender in tenders:
-            if "title" in tender and tender["title"].lower() in query:
+            if tender.get("title") and tender["title"].lower() in query:
                 return tender.get("md_file")
     except Exception as e:
         print("Error detecting file:", e)
     return None
 
-def answer_query(question: str):
+
+@traceable(name="answer_query")
+def answer_query(question: str, history: list | None = None) -> str:
+    intent = classify_intent(question)
+
+    if intent == "LIST":
+        return format_tender_list(index_file=INDEX_PATH)
+
     matched_file = detect_md_file_by_city_or_title(question)
+
+    # If nothing matched in THIS question, try carrying forward the city
+    # from the most recent previous question in the conversation.
+    if not matched_file and history:
+        for entry in reversed(history):
+            if entry.get("role") != "user":
+                continue
+            content = entry.get("content", [])
+            if not content or not isinstance(content, list):
+                continue
+            prior_text = content[0].get("text", "")
+            prior_match = detect_md_file_by_city_or_title(prior_text)
+            if prior_match:
+                matched_file = prior_match
+                break
+
     db = Chroma(persist_directory=DB_DIR, embedding_function=EMBEDDINGS)
 
     if matched_file:
-        base_retriever = db.as_retriever(search_kwargs={"k": 20, "filter": {"source": matched_file}})
+        base_docs = db.as_retriever(
+            search_kwargs={"k": 20, "filter": {"source": matched_file}}
+        ).invoke(question)
     else:
-        base_retriever = db.as_retriever(search_kwargs={"k": 20})
+        base_docs = db.as_retriever(search_kwargs={"k": 20}).invoke(question)
 
-    flashrank_client = Ranker(model_name="ms-marco-MiniLM-L-12-v2")
-    reranker = FlashrankRerank(client=flashrank_client, top_n=5)
+    if not base_docs:
+        return "Keine passenden Ausschreibungen gefunden."
 
-    retriever = ContextualCompressionRetriever(
-        base_retriever=base_retriever,
-        base_compressor=reranker
-    )
+    # Manual reranking (not via LangChain's ContextualCompressionRetriever wrapper)
+    # so we get real numeric relevance scores, not just a reordered list.
+    passages = [
+        {"id": i, "text": doc.page_content, "meta": doc.metadata}
+        for i, doc in enumerate(base_docs)
+    ]
+    rerank_results = RERANKER.rerank(RerankRequest(query=question, passages=passages))
 
-    qa = RetrievalQA.from_chain_type(
-        llm=LLM,
-        retriever=retriever,
-        chain_type="stuff",
-        chain_type_kwargs={"prompt": prompt},
-        return_source_documents=False,
-    )
+    top_results = rerank_results[:5]
+    top_score = top_results[0]["score"] if top_results else 0.0
+    print(f"Top relevance score: {top_score}")
 
-    return qa.run(question)
+    # Grounding guardrail: if even the best-matching chunk is a poor match,
+    # don't call the LLM at all — refuse honestly instead of risking a
+    # confident-sounding answer built on irrelevant context.
+    if top_score < RELEVANCE_THRESHOLD:
+        return "Keine spezifischen Informationen zu deiner Frage gefunden."
+
+    context = "\n\n".join(r["text"] for r in top_results)
+    formatted_prompt = prompt.format(context=context, question=question)
+    response = LLM.invoke(formatted_prompt)
+    return response.content
+
 
 if __name__ == "__main__":
     print("Ausschreibungs-LLM gestartet. Tippe 'exit' zum Beenden.")

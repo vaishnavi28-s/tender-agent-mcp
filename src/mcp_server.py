@@ -20,9 +20,9 @@ import asyncio
 from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import Optional
-
 sys.path.append(os.path.dirname(__file__))
-
+from router import classify_intent
+from formatting import format_tender_list 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, validator
 from dotenv import load_dotenv
@@ -124,29 +124,6 @@ class LimitInput(BaseModel):
 
 
 
-# Saves tokens
-
-def _is_list_query(text: str) -> bool:
-    """Returns True if query just needs a list — no LLM needed."""
-    keywords = [
-        "list", "show all", "show me all", "alle ausschreibungen",
-        "zeige alle", "zeige mir alle", "all tenders", "what tenders",
-        "welche ausschreibungen", "list all", "liste alle"
-    ]
-    t = text.lower().strip()
-    return any(kw in t for kw in keywords)
-
-
-def _needs_summary(text: str) -> bool:
-    keywords = ["summarize", "summary", "zusammenfassung", "überblick", "zusammenfassen"]
-    t = text.lower()
-    return any(kw in t for kw in keywords)
-
-
-def _needs_comparison(text: str) -> bool:
-    keywords = ["compare", "comparison", "vergleich", "vergleiche", "unterschied", "difference", " vs "]
-    t = text.lower()
-    return any(kw in t for kw in keywords)
 
 
 def _extract_city(text: str) -> Optional[str]:
@@ -168,26 +145,6 @@ INDEX_FILE = os.path.join(os.path.dirname(__file__), "..", "tenders_index.json")
 def _load_index() -> list:
     with open(INDEX_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
-
-
-def _format_tender_list(limit: int = 10) -> str:
-    try:
-        tenders = _load_index()
-        tenders = sorted(tenders, key=lambda t: t.get("deadline") or "", reverse=False)
-        result = ""
-        for t in tenders[:limit]:
-            result += (
-                f"### {t.get('title', 'Unknown')}\n"
-                f"- **Stadt:** {t.get('city', '—')}\n"
-                f"- **Frist:** {t.get('deadline', '—')}\n"
-                f"- **Link:** {t.get('link', '—')}\n\n"
-            )
-        return result or "Keine aktuellen Ausschreibungen gefunden."
-    except FileNotFoundError:
-        return "Tender index not found. Run fetch_latest_tenders first."
-    except Exception as e:
-        logger.error(f"_format_tender_list error: {e}")
-        return f"Error loading tender list: {e}"
 
 
 def _detect_matching_files(query: str) -> list:
@@ -262,23 +219,26 @@ async def search_tenders(question: str) -> str:
     except Exception as e:
         return f"Invalid input: {e}"
 
-    # Smart routing to avoid unnecessary LLM calls
-    if _is_list_query(question):
-        result = _format_tender_list(limit=10)
+    # Smart routing via LLM classification (no more brittle keyword matching)
+    intent = classify_intent(question)
+
+    if intent == "LIST":
+        result = format_tender_list(index_file=INDEX_FILE, limit=10)
         _audit_log(tool, {"question": question, "routed_to": "list"}, result, (time.time() - t0) * 1000)
         return result
 
-    if _needs_comparison(question):
+    if intent == "COMPARE":
         result = await compare_tenders()
         _audit_log(tool, {"question": question, "routed_to": "compare"}, result, (time.time() - t0) * 1000)
         return result
 
-    if _needs_summary(question):
+    if intent == "SUMMARY":
         city = _extract_city(question)
         if city:
             result = await summarize_tender(city)
             _audit_log(tool, {"question": question, "routed_to": "summarize"}, result, (time.time() - t0) * 1000)
             return result
+        # SUMMARY intent but no known city extracted — falls through to full RAG below
 
     # Full RAG + LLM path
     try:
@@ -293,7 +253,7 @@ async def search_tenders(question: str) -> str:
         return result
 
     except ConnectionError:
-        return "Error: Cannot connect to OpenAI API. Check your API key and internet connection."
+        return "Error: Cannot connect to Groq API. Check your API key and internet connection."
     except TimeoutError:
         return "Error: Request timed out. Try a shorter or simpler question."
     except Exception as e:
@@ -324,7 +284,7 @@ async def list_all_tenders(limit: int = 10) -> str:
     except Exception as e:
         return f"Invalid input: {e}"
 
-    result = _format_tender_list(limit=validated.limit)
+    result = format_tender_list(index_file=INDEX_FILE, limit=validated.limit)
     _audit_log(tool, {"limit": validated.limit}, result, (time.time() - t0) * 1000)
     return result
 
@@ -378,7 +338,7 @@ async def check_deadlines() -> str:
     if err := _check_rate_limit(tool):
         return err
 
-    result = _format_tender_list(limit=20)
+    result = format_tender_list(index_file=INDEX_FILE, limit=20)
     _audit_log(tool, {}, result, (time.time() - t0) * 1000)
     return result
 
@@ -388,7 +348,7 @@ async def fetch_latest_tenders() -> str:
     """
     Fetch the latest tenders from service.bund.de and rebuild the vector database.
 
-    WARNING: This triggers live web scraping and OpenAI embedding calls.
+    WARNING: This triggers live web scraping and embedding calls.
     Use sparingly — rate limited to 3 calls per hour.
 
     Returns:
@@ -595,10 +555,9 @@ async def health_check() -> str:
         index_status = "not found"
         next_deadline = "unknown"
 
-    # Check OpenAI key
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    api_status = "configured" if api_key.startswith("sk-") else "missing"
-
+    # Check Groq key
+    api_key = os.getenv("GROQ_API_KEY", "")
+    api_status = "configured" if api_key.startswith("gsk_") else "missing"
     result = (
         f"## TenderBot Health Check\n\n"
         f"**Status:** healthy\n"
@@ -606,7 +565,7 @@ async def health_check() -> str:
         f"**Vector DB:** {db_status}\n"
         f"**Tender Index:** {index_status}\n"
         f"**Next Deadline:** {next_deadline}\n"
-        f"**OpenAI API:** {api_status}\n"
+        f"**Groq API:** {api_status}\n"
         f"**Tools Available:** 9\n"
         f"**Timestamp:** {datetime.utcnow().isoformat()}Z\n"
     )
