@@ -1,4 +1,4 @@
-name: TenderBot CI
+﻿name: TenderBot CI
 
 on:
   push:
@@ -9,7 +9,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -20,11 +19,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements_streamlit.txt
+          pip install -r requirements.txt
           pip install pytest pytest-asyncio
 
       - name: Run tests
         run: pytest tests/ -v
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          LANGSMITH_TRACING: "false"
