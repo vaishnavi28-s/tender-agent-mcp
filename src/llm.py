@@ -55,11 +55,14 @@ def detect_md_file_by_city_or_title(query: str) -> str | None:
 
 
 @traceable(name="answer_query")
-def answer_query(question: str, history: list | None = None) -> str:
+def answer_query(question: str, history: list | None = None, return_metadata: bool = False):
     intent = classify_intent(question)
 
     if intent == "LIST":
-        return format_tender_list(index_file=INDEX_PATH)
+        answer = format_tender_list(index_file=INDEX_PATH)
+        if return_metadata:
+            return {"answer": answer, "route": intent, "score": None}
+        return answer
 
     matched_file = detect_md_file_by_city_or_title(question)
 
@@ -88,7 +91,10 @@ def answer_query(question: str, history: list | None = None) -> str:
         base_docs = db.as_retriever(search_kwargs={"k": 20}).invoke(question)
 
     if not base_docs:
-        return "Keine passenden Ausschreibungen gefunden."
+        answer = "Keine passenden Ausschreibungen gefunden."
+        if return_metadata:
+            return {"answer": answer, "route": intent, "score": None}
+        return answer
 
     # Manual reranking (not via LangChain's ContextualCompressionRetriever wrapper)
     # so we get real numeric relevance scores, not just a reordered list.
@@ -106,11 +112,16 @@ def answer_query(question: str, history: list | None = None) -> str:
     # don't call the LLM at all — refuse honestly instead of risking a
     # confident-sounding answer built on irrelevant context.
     if top_score < RELEVANCE_THRESHOLD:
-        return "Keine spezifischen Informationen zu deiner Frage gefunden."
+        answer = "Keine spezifischen Informationen zu deiner Frage gefunden."
+        if return_metadata:
+            return {"answer": answer, "route": intent, "score": round(float(top_score), 3)}
+        return answer
 
     context = "\n\n".join(r["text"] for r in top_results)
     formatted_prompt = prompt.format(context=context, question=question)
     response = LLM.invoke(formatted_prompt)
+    if return_metadata:
+        return {"answer": response.content, "route": intent, "score": round(float(top_score), 3)}
     return response.content
 
 

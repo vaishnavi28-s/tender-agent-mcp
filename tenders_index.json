@@ -14,5 +14,13 @@
     "announcement_url": "https://ausschreibung.halle.de/NetServer/PublicationControllerServlet?function=Detail&TWOID=54321-Tender-19cc19f8a26-4b05cba9aa8545a4&PublicationType=0",
     "city": "Stadt Halle (Saale)\nFachbereich Einwohnerwesen\nAbt. Statistik",
     "md_file": "Rahmenvereinbarung_zum_Transport_von_Wahlunterlagen_zur_Land.md"
+  },
+  {
+    "title": "Az. 25655 Zustellung von Wahlunterlagen für die Wahl der Seniorenvertretung 2026",
+    "link": "https://www.service.bund.de/IMPORTE/Ausschreibungen/ai-ag-prod/2026/07/54321-Tender-19f35dac342-1e25d0a56fd14a39.html#track=feed-callforbids",
+    "deadline": "17.08.2026",
+    "announcement_url": "https://vergabeplattform.stadt-koeln.de/NetServer/PublicationControllerServlet?function=Detail&TWOID=54321-Tender-19f35dac342-1e25d0a56fd14a39&PublicationType=0",
+    "city": "Stadtgebiet Köln\n        BremenKarte anschauenCPV-Code64112000",
+    "md_file": "Az_25655_Zustellung_von_Wahlunterlagen_für_die_Wahl_der_Seni.md"
   }
 ]
