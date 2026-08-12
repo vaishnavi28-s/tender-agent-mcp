@@ -1,0 +1,37 @@
+name: Weekly Tender Data Refresh
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Chrome for Selenium
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Run ingestion pipeline
+        run: python src/fetch_tenders.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tenders_index.json tenders_metadata.json tender_vector_db
+          git diff --staged --quiet || git commit -m "Automated weekly tender data refresh"
+          git push
