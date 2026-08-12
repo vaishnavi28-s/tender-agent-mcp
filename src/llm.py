@@ -1,4 +1,4 @@
-from dotenv import load_dotenv
+﻿from dotenv import load_dotenv
 load_dotenv()
 
 import os
@@ -21,13 +21,13 @@ INDEX_PATH = os.path.join(os.path.dirname(__file__), "..", "tenders_index.json")
 RELEVANCE_THRESHOLD = 0.3  # tune this empirically, see note below
 
 EMBEDDINGS = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-LLM = ChatGroq(model="openai/gpt-oss-20b", temperature=0, api_key=os.getenv("GROQ_API_KEY"))
+LLM = ChatGroq(model="openai/gpt-oss-20b", temperature=0, api_key=os.getenv("GROQ_API_KEY"), reasoning_format="hidden")
 RERANKER = Ranker(model_name="ms-marco-MiniLM-L-12-v2")
 
 prompt = PromptTemplate.from_template("""
-Du bist ein hilfreicher Assistent für öffentliche Ausschreibungen in Deutschland.
-Nutze ausschließlich den folgenden Kontext, um präzise Antworten zu geben. Antworte nur auf Deutsch.
-Wenn keine Informationen im Kontext gefunden wurden, gib klar an, dass keine Daten verfügbar sind.
+Du bist ein hilfreicher Assistent fÃ¼r Ã¶ffentliche Ausschreibungen in Deutschland.
+Nutze ausschlieÃŸlich den folgenden Kontext, um prÃ¤zise Antworten zu geben. Antworte nur auf Deutsch.
+Wenn keine Informationen im Kontext gefunden wurden, gib klar an, dass keine Daten verfÃ¼gbar sind.
 
 <context>
 {context}
@@ -109,7 +109,7 @@ def answer_query(question: str, history: list | None = None, return_metadata: bo
     print(f"Top relevance score: {top_score}")
 
     # Grounding guardrail: if even the best-matching chunk is a poor match,
-    # don't call the LLM at all — refuse honestly instead of risking a
+    # don't call the LLM at all â€” refuse honestly instead of risking a
     # confident-sounding answer built on irrelevant context.
     if top_score < RELEVANCE_THRESHOLD:
         answer = "Keine spezifischen Informationen zu deiner Frage gefunden."
@@ -120,9 +120,10 @@ def answer_query(question: str, history: list | None = None, return_metadata: bo
     context = "\n\n".join(r["text"] for r in top_results)
     formatted_prompt = prompt.format(context=context, question=question)
     response = LLM.invoke(formatted_prompt)
+    answer_text = response.content.strip() if response.content else "Entschuldigung, es gab ein Problem bei der Antwortgenerierung. Bitte versuche es erneut."
     if return_metadata:
-        return {"answer": response.content, "route": intent, "score": round(float(top_score), 3)}
-    return response.content
+        return {"answer": answer_text, "route": intent, "score": round(float(top_score), 3)}
+    return answer_text
 
 
 if __name__ == "__main__":
@@ -136,3 +137,5 @@ if __name__ == "__main__":
             print(answer_query(q))
         except Exception as e:
             print("Fehler:", e)
+
+
