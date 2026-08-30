@@ -13,7 +13,7 @@ def run_pipeline():
     global _pipeline_running
 
     if _pipeline_running:
-        print("Pipeline already running — skipping this scheduled trigger to avoid overlap.")
+        print("Pipeline already running; skipping this scheduled trigger to avoid overlap.")
         return
 
     _pipeline_running = True
