@@ -19,13 +19,10 @@ def run_pipeline():
     _pipeline_running = True
     try:
         print("Starting Tender Pipeline...")
-
         print("Fetching and processing tenders...")
-        fetch_and_process()
-
+        new_tenders = fetch_and_process()
         print("Building vector database...")
-        build_vector_store()
-
+        build_vector_store(new_tenders)
         print("Pipeline run complete.")
     except Exception as e:
         print(f"Pipeline run failed: {e}")
