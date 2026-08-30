@@ -7,9 +7,10 @@ import json
 import requests
 import feedparser
 import subprocess
+import chromadb
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
-from urllib.parse import urlencode, urlparse, urljoin
+from urllib.parse import urlparse, urljoin
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -18,39 +19,21 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
-from dotenv import load_dotenv
-load_dotenv()
-api_key = os.getenv("GROQ_API_KEY")
 
 SEARCH_TERM = "wahlunterlagen"
 BASE_URL = "https://www.service.bund.de/Content/DE/Ausschreibungen/Suche/Formular.html"
+RSS_SEARCH_PARAMS = {
+    "nn": "4641482",           # site-internal ID for this search 
+    "type": "0",               
+    "resultsPerPage": "100",
+    "sortOrder": "dateOfIssue_dt desc",
+    "jobsrss": "true",         
+}
+
 HEADERS = {"User-Agent": "TenderBot/1.0"}
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 200
-DB_DIR = "tender_vector_db"
-
-class Tender(BaseModel):
-    title: str
-    link: str
-    deadline: str
-    announcement_url: str | None
-    city: str | None = None
-    md_file: str | None = None
-
-def get_rss_url_from_search(search_term: str) -> str:
-    params = {
-        "nn": "4641482",
-        "type": "0",
-        "resultsPerPage": "100",
-        "templateQueryString": search_term,
-        "sortOrder": "dateOfIssue_dt desc",
-        "jobsrss": "true"
-    }
-    return f"{BASE_URL}?{urlencode(params)}"
-
-def fetch_rss_entries():
-    rss_url = get_rss_url_from_search(SEARCH_TERM)
-    r = requests.get(rss_url, headers=HEADERS, timeout=10)
+def fetch_rss_entries(search_term: str = SEARCH_TERM):
+    params = {**RSS_SEARCH_PARAMS, "templateQueryString": search_term}
+    r = requests.get(BASE_URL, headers=HEADERS, params=params, timeout=10)
     r.raise_for_status()
     feed = feedparser.parse(r.text)
     return [{"title": e.title, "link": e.link} for e in feed.entries]
@@ -85,6 +68,7 @@ def extract_city(html: str) -> str | None:
             if city_text:
                 return city_text.split(",")[0].strip()
     return None
+
 
 def extract_all_tab_urls(base_url):
     options = Options()
@@ -144,6 +128,7 @@ def clean_all_markdown_files(directory="."):
             cleaned = [line for line in lines if not is_noisy(line)]
             with open(fname, "w", encoding="utf-8") as f:
                 f.writelines(cleaned)
+                
 
 def fetch_and_process():
     existing = []
@@ -198,9 +183,13 @@ def fetch_and_process():
     with open("tenders_index.json", "w", encoding="utf-8") as f:
         json.dump(existing, f, indent=2, ensure_ascii=False)
     clean_all_markdown_files()
+    
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 200
+DB_DIR = "tender_vector_db"
+EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
 def build_vector_store():
-    import chromadb
 
     documents = []
     with open("tenders_index.json", "r", encoding="utf-8") as f:
@@ -216,17 +205,22 @@ def build_vector_store():
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     chunks = splitter.split_documents(documents)
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-
-    # Clear any existing collection first so rebuilding is idempotent —
-    # without this, every re-run duplicates every chunk already stored.
-    client = chromadb.PersistentClient(path=DB_DIR)
+    embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)   
+    client = chromadb.PersistentClient(path=DB_DIR)  # without this every re-run duplicates every chunk already stored
     existing = [c.name for c in client.list_collections()]
     if "langchain" in existing:
         client.delete_collection("langchain")
-
+        
     vectordb = Chroma.from_documents(documents=chunks, embedding=embeddings, persist_directory=DB_DIR)
 
+class Tender(BaseModel):
+    title: str
+    link: str
+    deadline: str
+    announcement_url: str | None
+    city: str | None = None
+    md_file: str | None = None
+    
 if __name__ == "__main__":
     fetch_and_process()
     build_vector_store()
