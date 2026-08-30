@@ -138,7 +138,8 @@ def fetch_and_process():
 
     existing_links = {t["link"] for t in existing}
     fetched = fetch_rss_entries()
-
+    newly_added = []
+    
     for entry in fetched:
         if entry["link"] in existing_links:
             continue
@@ -174,6 +175,7 @@ def fetch_and_process():
                 tender["md_file"] = md_filename
 
             existing.append(tender)
+            newly_added.append(tender)
 
         except Exception as e:
             print(f"Error processing tender: {e}")
@@ -183,6 +185,7 @@ def fetch_and_process():
     with open("tenders_index.json", "w", encoding="utf-8") as f:
         json.dump(existing, f, indent=2, ensure_ascii=False)
     clean_all_markdown_files()
+    return newly_added
     
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
