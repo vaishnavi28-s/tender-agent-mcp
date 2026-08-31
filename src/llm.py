@@ -14,20 +14,18 @@ sys.path.append(os.path.dirname(__file__))
 from router import classify_intent
 from formatting import format_tender_list
 
-
-
 DB_DIR = "tender_vector_db"
 INDEX_PATH = os.path.join(os.path.dirname(__file__), "..", "tenders_index.json")
-RELEVANCE_THRESHOLD = 0.3  # tune this empirically, see note below
+RELEVANCE_THRESHOLD = 0.3 
 
 EMBEDDINGS = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 LLM = ChatGroq(model="openai/gpt-oss-20b", temperature=0, api_key=os.getenv("GROQ_API_KEY"), reasoning_format="hidden")
 RERANKER = Ranker(model_name="ms-marco-MiniLM-L-12-v2")
 
 prompt = PromptTemplate.from_template("""
-Du bist ein hilfreicher Assistent fÃ¼r Ã¶ffentliche Ausschreibungen in Deutschland.
-Nutze ausschlieÃŸlich den folgenden Kontext, um prÃ¤zise Antworten zu geben. Antworte nur auf Deutsch.
-Wenn keine Informationen im Kontext gefunden wurden, gib klar an, dass keine Daten verfÃ¼gbar sind.
+Du bist ein hilfreicher Assistent für öffentliche Ausschreibungen in Deutschland.
+Nutze Ausschließlich den folgenden Kontext, um Präzise Antworten zu geben. Antworte nur auf Deutsch.
+Wenn keine Informationen im Kontext gefunden wurden, gib klar an, dass keine Daten verfügbar sind.
 
 <context>
 {context}
@@ -96,8 +94,7 @@ def answer_query(question: str, history: list | None = None, return_metadata: bo
             return {"answer": answer, "route": intent, "score": None}
         return answer
 
-    # Manual reranking (not via LangChain's ContextualCompressionRetriever wrapper)
-    # so we get real numeric relevance scores, not just a reordered list.
+    # Manual reranking (not via LangChain's ContextualCompressionRetriever wrapper) so we get real numeric relevance scores
     passages = [
         {"id": i, "text": doc.page_content, "meta": doc.metadata}
         for i, doc in enumerate(base_docs)
@@ -109,8 +106,7 @@ def answer_query(question: str, history: list | None = None, return_metadata: bo
     print(f"Top relevance score: {top_score}")
 
     # Grounding guardrail: if even the best-matching chunk is a poor match,
-    # don't call the LLM at all â€” refuse honestly instead of risking a
-    # confident-sounding answer built on irrelevant context.
+    # don't call the LLM at all refuse honestly instead of risking a confident-sounding answer built on irrelevant context.
     if top_score < RELEVANCE_THRESHOLD:
         answer = "Keine spezifischen Informationen zu deiner Frage gefunden."
         if return_metadata:
